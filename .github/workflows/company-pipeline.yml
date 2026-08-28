@@ -1,0 +1,50 @@
+name: UK Company Pipeline
+
+on:
+  schedule:
+    # Run daily at 02:00 UTC
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+    # Allow manual triggering from Actions tab
+
+jobs:
+  enrich-companies:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install Dependencies
+        run: npm ci
+
+      - name: Generate Prisma Client
+        run: npx prisma generate
+
+      - name: Deploy Database Migrations
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: npx prisma migrate deploy
+
+      - name: Run Health Check
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          COMPANIES_HOUSE_API_KEY: ${{ secrets.COMPANIES_HOUSE_API_KEY }}
+          GOOGLE_SHEETS_WEBHOOK_URL: ${{ secrets.GOOGLE_SHEETS_WEBHOOK_URL }}
+          GOOGLE_SHEETS_WEBHOOK_SECRET: ${{ secrets.GOOGLE_SHEETS_WEBHOOK_SECRET }}
+        run: npm run health
+
+      - name: Run Pipeline Scan
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          COMPANIES_HOUSE_API_KEY: ${{ secrets.COMPANIES_HOUSE_API_KEY }}
+          GOOGLE_SHEETS_WEBHOOK_URL: ${{ secrets.GOOGLE_SHEETS_WEBHOOK_URL }}
+          GOOGLE_SHEETS_WEBHOOK_SECRET: ${{ secrets.GOOGLE_SHEETS_WEBHOOK_SECRET }}
+        run: npm run scan

@@ -1,0 +1,30 @@
+node_modules/
+dist/
+.env
+.env.*
+!.env.example
+*.log
+
+# Credentials and keys — never commit
+*.pem
+*.key
+*.p12
+credentials.json
+service-account*.json
+*-credentials.json
+secrets.json
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+
+# Test / coverage artifacts
+coverage/
+.nyc_output/
+
+# Prisma local dev
+*.db
+*.db-journal
