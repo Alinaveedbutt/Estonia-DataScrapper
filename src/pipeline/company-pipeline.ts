@@ -144,15 +144,10 @@ export class CompanyPipeline {
       });
       console.log(
         `[Pipeline] Syncing ${toSync.length} rows to Google Sheets` +
-          ` (sorted: NO_WEBSITE → phone → contact; requirePhone=${config.app.sheetsRequirePhone})…`
+          ` (NO_WEBSITE only=${config.app.sheetsNoWebsiteOnly}, requirePhone=${config.app.sheetsRequirePhone})…`
       );
       try {
-        await this.webhook.syncCompanies(toSync);
-        await this.webhook.updateStats({
-          ...stats,
-          sheetsSynced: toSync.length,
-          sheetsRequirePhone: config.app.sheetsRequirePhone,
-        });
+        await this.webhook.syncCompanies(toSync, new Date());
       } catch (err: any) {
         runSucceeded = false;
         console.error(`[Pipeline] Sheets sync failed: ${err.message}`);

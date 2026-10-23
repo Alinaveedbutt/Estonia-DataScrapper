@@ -87,21 +87,36 @@ ESTONIA_LOCAL_DUMP_PATH=/path/to/ettevotja_rekvisiidid__yldandmed.json.zip \
 4. Deploy → Web app → Execute as Me → Anyone
 5. Put the URL and secret in `.env` (or GitHub Actions secrets)
 
-### Sheet columns
+### Sheet columns (Companies)
 
-Registry Code, Company Name, Registration Date, Status, Status Text, Legal Form, Address Line, Locality, Postal Code, Country, Full Address, Website Status, Website URL, Website Source, **Phone**, **Phone Type**, Email, Contact Source, Contact Status, Phone Missing Reason, Email Missing Reason, First Seen, Last Checked, Data Source
+Exactly seven columns:
 
-Rows upsert by **Registry Code**.
+| Column | Content |
+|--------|---------|
+| Daily pipeline Run Date | Date/time of this pipeline run (`DD/MM/YYYY HH:mm UTC`) |
+| Registry Code | Estonian registry code |
+| Company's Name | Legal name |
+| Registry Date | First registration date as **DD/MM/YYYY** (date/month/year) |
+| Website Status | **Yes** or **No** |
+| Email | Official register email (if any) |
+| Phone Number | Official register phone (MOB preferred, else TEL) |
+
+Rows upsert by **Registry Code**. Defaults only *send* NO_WEBSITE + phone rows, so Website Status on the sheet is normally **No**.
+
+### Rolling 7-day retention
+
+After each sync, Apps Script **deletes** Companies rows where **Registry Date** or **Daily pipeline Run Date** is more than **7 days** before today. Aligns with `ESTONIA_LOOKBACK_DAYS=7` — a rolling week of cold-call leads.
 
 ### Sync filters (env)
 
 | Variable | Default | Effect |
 |----------|---------|--------|
-| `SHEETS_NO_WEBSITE_ONLY` | `true` | Only sync `NO_WEBSITE` rows (set `false` to include companies with websites) |
-| `SHEETS_REQUIRE_PHONE` | `true` | Only sync rows with official phone (cold-call) |
+| `SHEETS_NO_WEBSITE_ONLY` | `true` | Only sync `NO_WEBSITE` rows |
+| `SHEETS_REQUIRE_PHONE` | `true` | Only sync rows with official phone |
 | `SHEETS_REQUIRE_CONTACT` | `false` | If phone filter off: require phone or email |
+| `ESTONIA_LOOKBACK_DAYS` | `7` | Discovery window; matches sheet retention |
 
-Set `SHEETS_REQUIRE_PHONE=false` if you also want email-only NO_WEBSITE leads in the sheet.
+**After updating `Code.gs`:** Deploy → Manage deployments → Edit → **New version** → Deploy, then run the workflow once (Actions → Estonia Company Pipeline → Run workflow).
 
 ---
 

@@ -1,6 +1,7 @@
 import axios from 'axios';
 import { config } from '../config/env';
 import { CompanyRecord } from '../types/company';
+import { SheetsCompanyRow, toSheetsRow } from './row';
 
 /**
  * Google Apps Script Webhook Client
@@ -30,7 +31,7 @@ export class GoogleSheetsWebhook {
     for (let attempt = 0; attempt < 4; attempt++) {
       try {
         const response = await axios.post(this.url, payload, {
-          timeout: 30000,
+          timeout: 60000,
           headers: { 'Content-Type': 'application/json' },
           maxRedirects: 5,
           validateStatus: (s) => s >= 200 && s < 400,
@@ -58,12 +59,13 @@ export class GoogleSheetsWebhook {
     throw lastError || new Error('Webhook retries exhausted');
   }
 
-  public async syncCompanies(companies: CompanyRecord[]): Promise<void> {
+  public async syncCompanies(companies: CompanyRecord[], runAt: Date = new Date()): Promise<void> {
     if (companies.length === 0) return;
 
+    const rows: SheetsCompanyRow[] = companies.map((c) => toSheetsRow(c, runAt));
     const batchSize = 50;
-    for (let i = 0; i < companies.length; i += batchSize) {
-      const batch = companies.slice(i, i + batchSize);
+    for (let i = 0; i < rows.length; i += batchSize) {
+      const batch = rows.slice(i, i + batchSize);
       try {
         const result = await this.post({
           secret: this.secret,
@@ -72,28 +74,14 @@ export class GoogleSheetsWebhook {
         });
         if (result) {
           console.log(
-            `[GS-Webhook] Synced batch: ${result.inserted || 0} inserted, ${result.updated || 0} updated`
+            `[GS-Webhook] Synced batch: ${result.inserted || 0} inserted, ${result.updated || 0} updated` +
+              (result.purged != null ? `, purged ${result.purged} old rows` : '')
           );
         }
       } catch (error: any) {
         console.error(`[GS-Webhook] Company sync error: ${error.message}`);
         throw error;
       }
-    }
-  }
-
-  public async updateStats(stats: object): Promise<void> {
-    try {
-      const result = await this.post({
-        secret: this.secret,
-        action: 'update_stats',
-        stats,
-      });
-      if (result) {
-        console.log('[GS-Webhook] Statistics updated');
-      }
-    } catch (error: any) {
-      console.error(`[GS-Webhook] Stats sync error: ${error.message}`);
     }
   }
 

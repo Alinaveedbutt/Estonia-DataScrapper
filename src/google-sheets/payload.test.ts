@@ -1,52 +1,46 @@
 import { mapCompany } from '../estonia/mapper';
 import fixtures from '../estonia/fixtures/sample-companies.json';
+import { toSheetsRow } from './row';
 
-/** Mirror Apps Script companyToRow field order for regression safety. */
-function toSheetsPayload(c: ReturnType<typeof mapCompany>) {
-  return {
-    registry_code: c.registry_code || '',
-    company_name: c.company_name || '',
-    registration_date: c.registration_date || '',
-    company_status: c.company_status || '',
-    company_status_text: c.company_status_text || '',
-    legal_form: c.legal_form || '',
-    address_line: c.address_line || '',
-    locality: c.locality || '',
-    postal_code: c.postal_code || '',
-    country: c.country || '',
-    full_address: c.full_address || '',
-    website_status: c.website_status || '',
-    website_url: c.website_url || '',
-    website_source: c.website_source || '',
-    phone: c.phone || '',
-    phone_type: c.phone_type || '',
-    email: c.email || '',
-    contact_source: c.contact_source || '',
-    contact_status: c.contact_status || '',
-    phone_missing_reason: c.phone_missing_reason || '',
-    email_missing_reason: c.email_missing_reason || '',
-    first_seen: c.first_seen || '',
-    last_checked: c.last_checked || '',
-    data_source: c.data_source || '',
-  };
-}
-
-describe('Sheets payload phone field', () => {
-  it('includes official phone on NO_WEBSITE rows when register has MOB', () => {
+describe('Sheets 7-column payload', () => {
+  it('maps NO_WEBSITE lead to Yes/No website and DD/MM/YYYY registry date', () => {
     const mapped = mapCompany(fixtures[0], {
       websiteStatus: 'NO_WEBSITE',
       websiteUrl: null,
       websiteSource: null,
     });
-    const payload = toSheetsPayload(mapped);
-    expect(payload.phone).toBe('+372 58291086');
-    expect(payload.phone_type).toBe('MOB');
-    expect(payload.email).toBe('a.zazhitskaya@gmail.com');
-    expect(payload.website_status).toBe('NO_WEBSITE');
-    expect(payload.contact_status).toBe('COMPLETE');
+    const row = toSheetsRow(mapped, new Date('2026-10-23T15:30:00Z'));
+
+    expect(row.run_date).toBe('23/10/2026 15:30 UTC');
+    expect(row.registry_code).toBe('17630099');
+    expect(row.company_name).toBe('0111 Productions OÜ');
+    expect(row.registry_date).toBe('21/10/2026');
+    expect(row.website_status).toBe('No');
+    expect(row.email).toBe('a.zazhitskaya@gmail.com');
+    expect(row.phone).toBe('+372 58291086');
+    expect(Object.keys(row)).toEqual([
+      'run_date',
+      'registry_code',
+      'company_name',
+      'registry_date',
+      'website_status',
+      'email',
+      'phone',
+    ]);
   });
 
-  it('keeps phone empty string (not invented) when register has none', () => {
+  it('maps WEBSITE_EXISTS to Yes', () => {
+    const mapped = mapCompany(fixtures[1], {
+      websiteStatus: 'WEBSITE_EXISTS',
+      websiteUrl: 'https://kilomotors.ee/',
+      websiteSource: 'e-Business Register (WWW)',
+    });
+    const row = toSheetsRow(mapped, new Date('2026-10-23T12:00:00Z'));
+    expect(row.website_status).toBe('Yes');
+    expect(row.registry_date).toBe('14/10/2026');
+  });
+
+  it('leaves phone empty when register has none (never invents)', () => {
     const mapped = mapCompany(
       {
         ariregistri_kood: 9,
@@ -58,9 +52,9 @@ describe('Sheets payload phone field', () => {
       },
       { websiteStatus: 'NO_WEBSITE', websiteUrl: null, websiteSource: null }
     );
-    const payload = toSheetsPayload(mapped);
-    expect(payload.phone).toBe('');
-    expect(payload.email).toBe('only@email.ee');
-    expect(payload.phone_missing_reason).toContain('Not published');
+    const row = toSheetsRow(mapped);
+    expect(row.phone).toBe('');
+    expect(row.email).toBe('only@email.ee');
+    expect(row.website_status).toBe('No');
   });
 });

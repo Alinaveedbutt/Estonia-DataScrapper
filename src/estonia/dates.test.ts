@@ -1,4 +1,11 @@
-import { formatIsoDate, parseEstonianDate, toSheetDate } from './dates';
+import {
+  formatDdMmYyyy,
+  formatIsoDate,
+  formatRunDateTime,
+  parseEstonianDate,
+  toRegistryDisplayDate,
+  toSheetDate,
+} from './dates';
 
 describe('Estonian dates', () => {
   it('parses DD.MM.YYYY', () => {
@@ -17,7 +24,17 @@ describe('Estonian dates', () => {
     expect(parseEstonianDate('not-a-date')).toBeNull();
   });
 
-  it('toSheetDate converts register format', () => {
+  it('toSheetDate keeps ISO for internal use', () => {
     expect(toSheetDate('05.06.2023')).toBe('2023-06-05');
+  });
+
+  it('formats Registry Date as DD/MM/YYYY', () => {
+    expect(toRegistryDisplayDate('21.10.2026')).toBe('21/10/2026');
+    expect(toRegistryDisplayDate('2026-10-21')).toBe('21/10/2026');
+    expect(formatDdMmYyyy(new Date(Date.UTC(2026, 9, 23)))).toBe('23/10/2026');
+  });
+
+  it('formats pipeline run datetime', () => {
+    expect(formatRunDateTime(new Date('2026-10-23T15:30:00Z'))).toBe('23/10/2026 15:30 UTC');
   });
 });

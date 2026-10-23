@@ -1,21 +1,11 @@
 // ============================================================
 // Google Apps Script — Estonia Company Pipeline Webhook Receiver
 // ============================================================
-// Deploy this as a Web App in Google Apps Script.
+// Deploy as Web App (Execute as: Me, Who has access: Anyone).
+// Script Property: WEBHOOK_SECRET
 //
-// SETUP:
-// 1. Open your Google Sheet
-// 2. Extensions > Apps Script
-// 3. Paste this entire code into Code.gs
-// 4. Set WEBHOOK_SECRET via Project Settings > Script Properties
-// 5. Deploy > New deployment > Web app
-//    - Execute as: Me
-//    - Who has access: Anyone
-// 6. Copy the Web App URL → GOOGLE_SHEETS_WEBHOOK_URL
-// 7. Same secret → GOOGLE_SHEETS_WEBHOOK_SECRET
-//
-// Cold-call note: Phone is a first-class column. Default pipeline sync
-// prefers NO_WEBSITE rows that have an official register phone.
+// Companies sheet: rolling 7-day cold-call leads (NO WEBSITE + phone).
+// After each sync, rows older than 7 days (by Registry Date OR Run Date) are deleted.
 // ============================================================
 
 function getWebhookSecret() {
@@ -23,173 +13,183 @@ function getWebhookSecret() {
 }
 
 const COMPANIES_SHEET = 'Companies';
-const STATS_SHEET = 'Statistics';
+const RETENTION_DAYS = 7;
 
-// Cold-outreach columns (Estonia) — Phone is required for cold-call workflows
+// Column order MUST match pipeline SheetsCompanyRow
 const COMPANY_HEADERS = [
-  'Registry Code', 'Company Name', 'Registration Date', 'Status', 'Status Text', 'Legal Form',
-  'Address Line', 'Locality', 'Postal Code', 'Country', 'Full Address',
-  'Website Status', 'Website URL', 'Website Source',
-  'Phone', 'Phone Type', 'Email', 'Contact Source', 'Contact Status',
-  'Phone Missing Reason', 'Email Missing Reason',
-  'First Seen', 'Last Checked', 'Data Source'
+  'Daily pipeline Run Date',
+  'Registry Code',
+  "Company's Name",
+  'Registry Date',
+  'Website Status',
+  'Email',
+  'Phone Number'
 ];
+
+const COL_RUN_DATE = 0;
+const COL_REGISTRY_CODE = 1;
+const COL_REGISTRY_DATE = 3;
 
 function doPost(e) {
   try {
     const payload = JSON.parse(e.postData.contents);
     const expectedSecret = getWebhookSecret();
     if (!expectedSecret || payload.secret !== expectedSecret) {
-      return ContentService.createTextOutput(JSON.stringify({
-        success: false, error: 'Unauthorized'
-      })).setMimeType(ContentService.MimeType.JSON);
+      return jsonOut({ success: false, error: 'Unauthorized' });
     }
 
     const action = payload.action || 'sync_companies';
+    if (action === 'sync_companies') return handleSyncCompanies(payload);
+    if (action === 'health') return jsonOut({ success: true, message: 'Healthy' });
+    // update_stats kept as no-op for older clients
+    if (action === 'update_stats') return jsonOut({ success: true });
 
-    if (action === 'sync_companies') {
-      return handleSyncCompanies(payload);
-    } else if (action === 'update_stats') {
-      return handleUpdateStats(payload);
-    } else if (action === 'health') {
-      return ContentService.createTextOutput(JSON.stringify({
-        success: true, message: 'Healthy'
-      })).setMimeType(ContentService.MimeType.JSON);
-    }
-
-    return ContentService.createTextOutput(JSON.stringify({
-      success: false, error: 'Unknown action: ' + action
-    })).setMimeType(ContentService.MimeType.JSON);
-
+    return jsonOut({ success: false, error: 'Unknown action: ' + action });
   } catch (err) {
-    return ContentService.createTextOutput(JSON.stringify({
-      success: false, error: 'Server error: ' + err.message
-    })).setMimeType(ContentService.MimeType.JSON);
+    return jsonOut({ success: false, error: 'Server error: ' + err.message });
   }
 }
 
-function handleSyncCompanies(payload) {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  let sheet = ss.getSheetByName(COMPANIES_SHEET);
+function jsonOut(obj) {
+  return ContentService.createTextOutput(JSON.stringify(obj))
+    .setMimeType(ContentService.MimeType.JSON);
+}
 
+function ensureCompaniesSheet(ss) {
+  var sheet = ss.getSheetByName(COMPANIES_SHEET);
   if (!sheet) {
     sheet = ss.insertSheet(COMPANIES_SHEET);
-    sheet.getRange(1, 1, 1, COMPANY_HEADERS.length).setValues([COMPANY_HEADERS]);
-    sheet.getRange(1, 1, 1, COMPANY_HEADERS.length).setFontWeight('bold');
   }
 
+  // Migrate: if headers don't match the 7-column layout, wipe and reset.
+  var needsReset = false;
   if (sheet.getLastRow() === 0) {
-    sheet.getRange(1, 1, 1, COMPANY_HEADERS.length).setValues([COMPANY_HEADERS]);
-    sheet.getRange(1, 1, 1, COMPANY_HEADERS.length).setFontWeight('bold');
+    needsReset = true;
   } else {
-    // Keep headers in sync when columns are added (e.g. Phone Type)
+    var existing = sheet.getRange(1, 1, 1, Math.max(sheet.getLastColumn(), COMPANY_HEADERS.length)).getValues()[0];
+    for (var i = 0; i < COMPANY_HEADERS.length; i++) {
+      if (String(existing[i] || '').trim() !== COMPANY_HEADERS[i]) {
+        needsReset = true;
+        break;
+      }
+    }
+    if (sheet.getLastColumn() > COMPANY_HEADERS.length) needsReset = true;
+  }
+
+  if (needsReset) {
+    sheet.clear();
     sheet.getRange(1, 1, 1, COMPANY_HEADERS.length).setValues([COMPANY_HEADERS]);
     sheet.getRange(1, 1, 1, COMPANY_HEADERS.length).setFontWeight('bold');
   }
 
-  const companies = payload.companies || [];
-  if (companies.length === 0) {
-    return ContentService.createTextOutput(JSON.stringify({
-      success: true, inserted: 0, updated: 0
-    })).setMimeType(ContentService.MimeType.JSON);
-  }
+  return sheet;
+}
 
-  const data = sheet.getDataRange().getValues();
-  const companyIndex = {};
-  for (let i = 1; i < data.length; i++) {
-    const cn = String(data[i][0]).trim();
-    if (cn) companyIndex[cn] = i + 1;
-  }
+function handleSyncCompanies(payload) {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ensureCompaniesSheet(ss);
 
-  let inserted = 0;
-  let updated = 0;
+  var companies = payload.companies || [];
+  var inserted = 0;
+  var updated = 0;
 
-  for (const c of companies) {
-    const row = companyToRow(c);
-    const key = String(c.registry_code || '').trim();
-    const existingRow = companyIndex[key];
+  if (companies.length > 0) {
+    var data = sheet.getDataRange().getValues();
+    var companyIndex = {};
+    for (var i = 1; i < data.length; i++) {
+      var code = String(data[i][COL_REGISTRY_CODE] || '').trim();
+      if (code) companyIndex[code] = i + 1;
+    }
 
-    if (existingRow) {
-      sheet.getRange(existingRow, 1, 1, row.length).setValues([row]);
-      updated++;
-    } else {
-      sheet.appendRow(row);
-      companyIndex[key] = sheet.getLastRow();
-      inserted++;
+    for (var c = 0; c < companies.length; c++) {
+      var company = companies[c];
+      var row = companyToRow(company);
+      var key = String(company.registry_code || '').trim();
+      if (!key) continue;
+
+      var existingRow = companyIndex[key];
+      if (existingRow) {
+        sheet.getRange(existingRow, 1, 1, row.length).setValues([row]);
+        updated++;
+      } else {
+        sheet.appendRow(row);
+        companyIndex[key] = sheet.getLastRow();
+        inserted++;
+      }
     }
   }
 
-  return ContentService.createTextOutput(JSON.stringify({
-    success: true, inserted: inserted, updated: updated
-  })).setMimeType(ContentService.MimeType.JSON);
+  // Always purge stale rows (rolling 7-day lead window)
+  var purged = purgeOldRows(sheet);
+
+  return jsonOut({
+    success: true,
+    inserted: inserted,
+    updated: updated,
+    purged: purged
+  });
 }
 
 function companyToRow(c) {
   return [
+    c.run_date || '',
     c.registry_code || '',
     c.company_name || '',
-    c.registration_date || '',
-    c.company_status || '',
-    c.company_status_text || '',
-    c.legal_form || '',
-    c.address_line || '',
-    c.locality || '',
-    c.postal_code || '',
-    c.country || '',
-    c.full_address || '',
+    c.registry_date || '',
     c.website_status || '',
-    c.website_url || '',
-    c.website_source || '',
-    c.phone || '',
-    c.phone_type || '',
     c.email || '',
-    c.contact_source || '',
-    c.contact_status || '',
-    c.phone_missing_reason || '',
-    c.email_missing_reason || '',
-    c.first_seen || '',
-    c.last_checked || '',
-    c.data_source || 'e-Business Register open data'
+    c.phone || ''
   ];
 }
 
-function handleUpdateStats(payload) {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  let sheet = ss.getSheetByName(STATS_SHEET);
+/**
+ * Delete data rows where Registry Date OR Daily pipeline Run Date
+ * is more than RETENTION_DAYS before today (rolling week of leads).
+ */
+function purgeOldRows(sheet) {
+  var lastRow = sheet.getLastRow();
+  if (lastRow < 2) return 0;
 
-  if (!sheet) {
-    sheet = ss.insertSheet(STATS_SHEET);
+  var cutoff = new Date();
+  cutoff.setHours(0, 0, 0, 0);
+  cutoff.setDate(cutoff.getDate() - RETENTION_DAYS);
+
+  var numDataRows = lastRow - 1;
+  var values = sheet.getRange(2, 1, numDataRows, COMPANY_HEADERS.length).getValues();
+  var purged = 0;
+
+  // Delete from bottom up so indices stay valid
+  for (var i = values.length - 1; i >= 0; i--) {
+    var runDate = parseSheetDate(values[i][COL_RUN_DATE]);
+    var registryDate = parseSheetDate(values[i][COL_REGISTRY_DATE]);
+    var stale =
+      (runDate && runDate < cutoff) ||
+      (registryDate && registryDate < cutoff);
+
+    if (stale) {
+      sheet.deleteRow(i + 2);
+      purged++;
+    }
   }
 
-  const stats = payload.stats || {};
+  return purged;
+}
 
-  const rows = [
-    ['Metric', 'Value'],
-    ['Total Companies (run)', stats.totalCompanies || 0],
-    ['Website Exists', stats.totalWithWebsite || 0],
-    ['No Website (outreach priority)', stats.totalNoWebsite || 0],
-    ['Phone Coverage % (no website)', stats.phoneCoverage || '0%'],
-    ['Email Coverage % (no website)', stats.emailCoverage || '0%'],
-    ['Phone + Email Coverage % (no website)', stats.phoneEmailCoverage || '0%'],
-    ['Phones Found (no website)', stats.phonesFound || 0],
-    ['Emails Found (no website)', stats.emailsFound || 0],
-    ['Phone + Email Found (no website)', stats.phoneAndEmail || 0],
-    ['Sheets Rows Synced', stats.sheetsSynced || 0],
-    ['Sheets Require Phone', stats.sheetsRequirePhone === true || stats.sheetsRequirePhone === 'true' ? 'yes' : 'no'],
-    ['No Website — No Contact Yet', stats.notYetPublic || 0],
-    ['Processing Errors', stats.failures || 0],
-    ['Scan From', stats.scanFrom || ''],
-    ['Scan To', stats.scanTo || ''],
-    ['Source', stats.sourceFile || ''],
-    ['Last Successful Run Checkpoint', stats.lastSuccessfulRun || ''],
-    ['Last Attempted Run', stats.lastAttemptedRun || '']
-  ];
-
-  sheet.clearContents();
-  sheet.getRange(1, 1, rows.length, 2).setValues(rows);
-  sheet.getRange(1, 1, 1, 2).setFontWeight('bold');
-
-  return ContentService.createTextOutput(JSON.stringify({
-    success: true
-  })).setMimeType(ContentService.MimeType.JSON);
+/** Parse DD/MM/YYYY or DD/MM/YYYY HH:mm UTC or Date objects from the sheet. */
+function parseSheetDate(value) {
+  if (!value) return null;
+  if (Object.prototype.toString.call(value) === '[object Date]' && !isNaN(value.getTime())) {
+    var d = new Date(value.getTime());
+    d.setHours(0, 0, 0, 0);
+    return d;
+  }
+  var s = String(value).trim();
+  var m = /^(\d{2})\/(\d{2})\/(\d{4})/.exec(s);
+  if (!m) return null;
+  var day = parseInt(m[1], 10);
+  var month = parseInt(m[2], 10) - 1;
+  var year = parseInt(m[3], 10);
+  var parsed = new Date(year, month, day);
+  parsed.setHours(0, 0, 0, 0);
+  return isNaN(parsed.getTime()) ? null : parsed;
 }
