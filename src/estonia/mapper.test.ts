@@ -16,6 +16,7 @@ describe('mapCompany', () => {
     expect(row.company_name).toBe('0111 Productions OÜ');
     expect(row.registration_date).toBe('2026-10-21');
     expect(row.phone).toBe('+372 58291086');
+    expect(row.phone_type).toBe('MOB');
     expect(row.email).toBe('a.zazhitskaya@gmail.com');
     expect(row.contact_status).toBe('COMPLETE');
     expect(row.website_status).toBe('NO_WEBSITE');

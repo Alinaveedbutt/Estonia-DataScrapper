@@ -13,6 +13,9 @@
 //    - Who has access: Anyone
 // 6. Copy the Web App URL → GOOGLE_SHEETS_WEBHOOK_URL
 // 7. Same secret → GOOGLE_SHEETS_WEBHOOK_SECRET
+//
+// Cold-call note: Phone is a first-class column. Default pipeline sync
+// prefers NO_WEBSITE rows that have an official register phone.
 // ============================================================
 
 function getWebhookSecret() {
@@ -22,12 +25,12 @@ function getWebhookSecret() {
 const COMPANIES_SHEET = 'Companies';
 const STATS_SHEET = 'Statistics';
 
-// Cold-outreach columns (Estonia)
+// Cold-outreach columns (Estonia) — Phone is required for cold-call workflows
 const COMPANY_HEADERS = [
   'Registry Code', 'Company Name', 'Registration Date', 'Status', 'Status Text', 'Legal Form',
   'Address Line', 'Locality', 'Postal Code', 'Country', 'Full Address',
   'Website Status', 'Website URL', 'Website Source',
-  'Phone', 'Email', 'Contact Source', 'Contact Status',
+  'Phone', 'Phone Type', 'Email', 'Contact Source', 'Contact Status',
   'Phone Missing Reason', 'Email Missing Reason',
   'First Seen', 'Last Checked', 'Data Source'
 ];
@@ -76,6 +79,10 @@ function handleSyncCompanies(payload) {
   }
 
   if (sheet.getLastRow() === 0) {
+    sheet.getRange(1, 1, 1, COMPANY_HEADERS.length).setValues([COMPANY_HEADERS]);
+    sheet.getRange(1, 1, 1, COMPANY_HEADERS.length).setFontWeight('bold');
+  } else {
+    // Keep headers in sync when columns are added (e.g. Phone Type)
     sheet.getRange(1, 1, 1, COMPANY_HEADERS.length).setValues([COMPANY_HEADERS]);
     sheet.getRange(1, 1, 1, COMPANY_HEADERS.length).setFontWeight('bold');
   }
@@ -134,6 +141,7 @@ function companyToRow(c) {
     c.website_url || '',
     c.website_source || '',
     c.phone || '',
+    c.phone_type || '',
     c.email || '',
     c.contact_source || '',
     c.contact_status || '',
@@ -166,6 +174,8 @@ function handleUpdateStats(payload) {
     ['Phones Found (no website)', stats.phonesFound || 0],
     ['Emails Found (no website)', stats.emailsFound || 0],
     ['Phone + Email Found (no website)', stats.phoneAndEmail || 0],
+    ['Sheets Rows Synced', stats.sheetsSynced || 0],
+    ['Sheets Require Phone', stats.sheetsRequirePhone === true || stats.sheetsRequirePhone === 'true' ? 'yes' : 'no'],
     ['No Website — No Contact Yet', stats.notYetPublic || 0],
     ['Processing Errors', stats.failures || 0],
     ['Scan From', stats.scanFrom || ''],

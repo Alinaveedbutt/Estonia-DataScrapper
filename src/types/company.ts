@@ -22,6 +22,7 @@ export interface CompanyRecord {
   website_url: string | null;
   website_source: string | null;
   phone: string | null;
+  phone_type: string | null;
   email: string | null;
   contact_source: string | null;
   contact_status: ContactStatus;

@@ -45,4 +45,6 @@ jobs:
           GOOGLE_SHEETS_WEBHOOK_SECRET: ${{ secrets.GOOGLE_SHEETS_WEBHOOK_SECRET }}
           ESTONIA_LOOKBACK_DAYS: '7'
           MAX_COMPANIES_PER_RUN: '500'
+          SHEETS_REQUIRE_PHONE: 'true'
+          SHEETS_NO_WEBSITE_ONLY: 'false'
         run: npm run scan

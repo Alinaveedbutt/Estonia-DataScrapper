@@ -84,6 +84,7 @@ export function mapCompany(raw: RawEstoniaCompany, options: MapOptions): Company
     website_url: options.websiteUrl,
     website_source: options.websiteSource,
     phone: contacts.phone,
+    phone_type: contacts.phoneType,
     email: contacts.email,
     contact_source: contacts.phone || contacts.email ? 'e-Business Register open data' : null,
     contact_status: contactStatus(contacts.phone, contacts.email),

@@ -1,16 +1,16 @@
 # Estonia Company Data Pipeline
 
-Zero-cost pipeline that finds **newly registered Estonian companies** from the official **e-Business Register open data**, classifies whether they have a website, pulls **official free phone/email** from the register, prioritises **NO WEBSITE** leads, and syncs rows to **Google Sheets** for manual cold call / email outreach.
+Zero-cost pipeline for **cold-call / email outreach**: finds **newly registered Estonian companies** from official **e-Business Register open data**, classifies website presence, pulls **official free phone and email** from the register, prioritises **NO WEBSITE + phone** leads, and syncs to **Google Sheets**.
 
 It does **not** send emails, make calls, or contact companies. You do outreach yourself.
 
+**Cold-call focus:** Phone is first-class (MOB preferred, then TEL). Default Sheets sync only includes rows with an official register phone (`SHEETS_REQUIRE_PHONE=true`). Email is kept alongside when published.
+
 ---
 
-## Why Estonia
+## Source
 
-Unlike the UK Companies House path (identity works; free contact enrichment fails), Estonia’s daily **General data** dump includes **Contacts** (`sidevahendid`) with high measured fill (~96% email / ~65% phone on active companies). Licence: open data with attribution (CC BY–style reuse via RIK terms).
-
-Official source: [Downloading open data — e-Business Register](https://avaandmed.ariregister.rik.ee/en/downloading-open-data)
+Daily **General data** dump from the [e-Business Register open data portal](https://avaandmed.ariregister.rik.ee/en/downloading-open-data) — includes identity fields plus **Contacts** (`sidevahendid`: EMAIL, TEL/MOB, WWW).
 
 ---
 
@@ -21,29 +21,27 @@ e-Business Register General data (JSON zip, free, daily)
         ↓
 Filter by first-entry / registration date (new companies)
         ↓
-Store identity: name, registry code, status, legal form, address, date
+Identity: name, registry code, status, legal form, address, date
         ↓
 Website detection:
   1) Official WWW from register contacts
   2) Domain probe (.ee / .com / .eu)
         ↓
-Website status: WEBSITE_EXISTS or NO_WEBSITE
+Official phone (MOB/TEL) + email from register only — never invented
         ↓
-Official phone + email from register only (never invented)
+Sort: NO_WEBSITE → has phone → has contact → newest
         ↓
-Prioritise NO_WEBSITE → Google Sheets (Apps Script webhook)
-        ↓
-You manually call / email and offer websites / apps
+Google Sheets (default: rows with phone) → you cold-call / email
 ```
 
-**Primary targets:** `NO_WEBSITE` rows with phone and/or email.
+**Primary targets:** `NO_WEBSITE` + official **phone** (offer websites / apps).
 
 ---
 
 ## Strict $0 constraints
 
 - No paid APIs, enrichment vendors, proxies, or CAPTCHA services
-- No Postgres / Neon / Prisma — process in memory from the open-data file, optional local checkpoint file, push to Sheets
+- No database — open-data file → memory → Sheets (+ small local checkpoint file)
 - Contacts only from official register fields — if missing, store null + reason
 
 ---
@@ -53,11 +51,12 @@ You manually call / email and offer websites / apps
 ```bash
 npm install
 cp .env.example .env
-# Set GOOGLE_SHEETS_WEBHOOK_URL + GOOGLE_SHEETS_WEBHOOK_SECRET (optional for dry run)
+# Set GOOGLE_SHEETS_WEBHOOK_URL + GOOGLE_SHEETS_WEBHOOK_SECRET
 
 npm test
 npm run health
 npm run scan -- --skip-sheets --max 20
+npm run scan
 ```
 
 Useful flags:
@@ -66,13 +65,11 @@ Useful flags:
 |------|---------|
 | `--from YYYY-MM-DD` | Start of registration window |
 | `--to YYYY-MM-DD` | End of registration window |
-| `--max N` | Cap companies after date filter |
+| `--max N` | Cap **after** phone/NO_WEBSITE prioritisation (keeps callable leads) |
 | `--skip-sheets` | Do not call Apps Script |
 | `--skip-website-probe` | Only trust register WWW |
 
-First run downloads the **General data** zip (~200MB compressed; ~4GB JSON streamed, not fully loaded into RAM) into `./data/`. Subsequent runs reuse / refresh that file. A small `data/pipeline-state.json` checkpoint tracks the last successful scan date.
-
-Dev shortcut — point at an already-downloaded zip:
+First run downloads the **General data** zip (~200MB compressed; ~4GB JSON streamed, not fully loaded into RAM) into `./data/`. Cache reused for ~20h. Checkpoint: `data/pipeline-state.json`.
 
 ```bash
 ESTONIA_LOCAL_DUMP_PATH=/path/to/ettevotja_rekvisiidid__yldandmed.json.zip \
@@ -91,9 +88,19 @@ ESTONIA_LOCAL_DUMP_PATH=/path/to/ettevotja_rekvisiidid__yldandmed.json.zip \
 
 ### Sheet columns
 
-Registry Code, Company Name, Registration Date, Status, Status Text, Legal Form, Address Line, Locality, Postal Code, Country, Full Address, Website Status, Website URL, Website Source, Phone, Email, Contact Source, Contact Status, Phone Missing Reason, Email Missing Reason, First Seen, Last Checked, Data Source
+Registry Code, Company Name, Registration Date, Status, Status Text, Legal Form, Address Line, Locality, Postal Code, Country, Full Address, Website Status, Website URL, Website Source, **Phone**, **Phone Type**, Email, Contact Source, Contact Status, Phone Missing Reason, Email Missing Reason, First Seen, Last Checked, Data Source
 
-Rows are upserted by **Registry Code**. Sync order puts **NO_WEBSITE** first. Set `SHEETS_NO_WEBSITE_ONLY=true` to sync only those rows.
+Rows upsert by **Registry Code**.
+
+### Sync filters (env)
+
+| Variable | Default | Effect |
+|----------|---------|--------|
+| `SHEETS_REQUIRE_PHONE` | `true` | Only sync rows with official phone (cold-call) |
+| `SHEETS_REQUIRE_CONTACT` | `false` | If phone filter off: require phone or email |
+| `SHEETS_NO_WEBSITE_ONLY` | `false` | Sync only `NO_WEBSITE` rows |
+
+Set `SHEETS_REQUIRE_PHONE=false` if you also want email-only leads in the sheet.
 
 ---
 
@@ -103,34 +110,23 @@ Rows are upserted by **Registry Code**. Sync order puts **NO_WEBSITE** first. Se
 |--------|---------|
 | `npm run scan` | Full pipeline |
 | `npm run health` | Open-data URL + Sheets webhook check |
-| `npm test` | Unit tests (parsers/mappers/checkpoint) |
+| `npm test` | Unit tests |
 | `npm run build` | Compile TypeScript |
 
 ---
 
 ## GitHub Actions
 
-Workflow **Estonia Company Pipeline** (`.github/workflows/company-pipeline.yml`) runs daily at 02:00 UTC and on `workflow_dispatch`.
+- **CI** (`.github/workflows/ci.yml`) — `npm test` + `npm run build` on PRs/pushes
+- **Estonia Company Pipeline** (`.github/workflows/company-pipeline.yml`) — daily 02:00 UTC + manual
 
-Secrets needed:
+Secrets for the daily job:
 
 - `GOOGLE_SHEETS_WEBHOOK_URL`
 - `GOOGLE_SHEETS_WEBHOOK_SECRET`
-
-No `DATABASE_URL` or Companies House key.
 
 ---
 
 ## Attribution / legal
 
-Data © Registrite ja Infosüsteemide Keskus (RIK) — reuse under their [open-data terms](https://avaandmed.ariregister.rik.ee/en/downloading-open-data). If you process personal data (e.g. sole-trader contact details), GDPR still applies; keep your own lawful basis for outreach and honour unsubscribe requests.
-
----
-
-## What changed from the UK version
-
-- Companies House API → Estonia General data open dump
-- Postgres/Neon/Prisma **removed** (not required; Sheets is the store)
-- UK directory scrapers / Yolist / FSA / council rates **removed**
-- Contacts come from official `sidevahendid` (EMAIL, TEL/MOB, WWW)
-- Branding/package renamed to Estonia (GitHub remote name unchanged)
+Data © Registrite ja Infosüsteemide Keskus (RIK) — reuse under their [open-data terms](https://avaandmed.ariregister.rik.ee/en/downloading-open-data). GDPR still applies to personal data in contacts; keep your own lawful basis for outreach.

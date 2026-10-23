@@ -13,12 +13,30 @@ describe('extractContacts', () => {
     expect(result.phoneType).toBe('MOB');
   });
 
+  it('prefers MOB over TEL when both exist', () => {
+    const result = extractContacts([
+      { liik: 'TEL', sisu: '+372 6123456' },
+      { liik: 'MOB', sisu: '+372 5550000' },
+    ]);
+    expect(result.phone).toBe('+372 5550000');
+    expect(result.phoneType).toBe('MOB');
+  });
+
+  it('accepts TEL when MOB is absent', () => {
+    const result = extractContacts([{ liik: 'TEL', sisu: '+372 6123456' }]);
+    expect(result.phone).toBe('+372 6123456');
+    expect(result.phoneType).toBe('TEL');
+  });
+
   it('ignores ended contacts', () => {
     const result = extractContacts([
       { liik: 'EMAIL', sisu: 'old@example.ee', lopp_kpv: '01.01.2020' },
       { liik: 'EMAIL', sisu: 'new@example.ee', lopp_kpv: null },
+      { liik: 'MOB', sisu: '+372 111', lopp_kpv: '01.01.2020' },
+      { liik: 'TEL', sisu: '+372 222', lopp_kpv: null },
     ]);
     expect(result.email).toBe('new@example.ee');
+    expect(result.phone).toBe('+372 222');
   });
 
   it('does not invent contacts when empty', () => {
@@ -26,10 +44,5 @@ describe('extractContacts', () => {
     expect(result.phone).toBeNull();
     expect(result.email).toBeNull();
     expect(result.website).toBeNull();
-  });
-
-  it('accepts TEL as phone', () => {
-    const result = extractContacts([{ liik: 'TEL', sisu: '+372 6123456' }]);
-    expect(result.phone).toBe('+372 6123456');
   });
 });

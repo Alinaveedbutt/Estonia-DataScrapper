@@ -12,12 +12,18 @@ export interface ExtractedContacts {
   phoneType: string | null;
 }
 
-const PHONE_TYPES = new Set(['TEL', 'MOB', 'PHONE']);
+const PHONE_TYPES = new Set(['TEL', 'MOB', 'PHONE', 'TELEFON']);
 const EMAIL_TYPES = new Set(['EMAIL', 'E-MAIL', 'MAIL']);
 const WEB_TYPES = new Set(['WWW', 'WEB', 'URL', 'HTTP']);
 
 function isActive(c: Sidevahend): boolean {
   return !c.lopp_kpv;
+}
+
+function normalizeType(raw: string | null | undefined): string {
+  return String(raw || '')
+    .trim()
+    .toUpperCase();
 }
 
 function normalizeWebsite(raw: string): string {
@@ -30,24 +36,24 @@ function normalizeWebsite(raw: string): string {
 /**
  * Extract official phone, email, and website from register contact channels.
  * Does not invent or guess — only uses published sidevahendid values.
+ * Phone is first-class for cold-call: prefers MOB, then TEL/PHONE.
  */
 export function extractContacts(sidevahendid: Sidevahend[] | null | undefined): ExtractedContacts {
   const list = (sidevahendid || []).filter(isActive);
-  let phone: string | null = null;
-  let phoneType: string | null = null;
+
   let email: string | null = null;
   let website: string | null = null;
+  let mob: { value: string; type: string } | null = null;
+  let tel: { value: string; type: string } | null = null;
 
   for (const c of list) {
-    const type = String(c.liik || '')
-      .trim()
-      .toUpperCase();
+    const type = normalizeType(c.liik);
     const value = String(c.sisu || '').trim();
     if (!value) continue;
 
-    if (!phone && PHONE_TYPES.has(type)) {
-      phone = value;
-      phoneType = type;
+    if (PHONE_TYPES.has(type)) {
+      if (type === 'MOB' && !mob) mob = { value, type };
+      else if (!tel) tel = { value, type };
     } else if (!email && EMAIL_TYPES.has(type)) {
       email = value;
     } else if (!website && WEB_TYPES.has(type)) {
@@ -55,20 +61,11 @@ export function extractContacts(sidevahendid: Sidevahend[] | null | undefined): 
     }
   }
 
-  // Prefer MOB over TEL if both present and phone not yet set from MOB
-  if (!phone) {
-    for (const c of list) {
-      const type = String(c.liik || '')
-        .trim()
-        .toUpperCase();
-      const value = String(c.sisu || '').trim();
-      if (type === 'TEL' && value) {
-        phone = value;
-        phoneType = 'TEL';
-        break;
-      }
-    }
-  }
-
-  return { phone, email, website, phoneType };
+  const chosen = mob || tel;
+  return {
+    phone: chosen?.value || null,
+    phoneType: chosen?.type || null,
+    email,
+    website,
+  };
 }

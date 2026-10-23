@@ -26,7 +26,7 @@ const DIRECTORY_DOMAINS = [
 ];
 
 const LEGAL_SUFFIXES =
-  /\b(oü|ou|osaühing|as|aktsiaselts|tü|tu|tulundusühistu|mtü|mtu|mittetulundusühing|fie|uü|uu|ltd|limited|inc|corp|group|holdings)\b/gi;
+  /\b(oü|ou|osaühing|as|aktsiaselts|tü|tu|tulundusühistu|mtü|mtu|mittetulundusühing|fie|uü|uu)\b/gi;
 
 export class WebsiteVerifier {
   async verifyWebsite(

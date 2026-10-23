@@ -22,8 +22,15 @@ export const config = {
   app: {
     logLevel: process.env.LOG_LEVEL || 'info',
     maxCompaniesPerRun: parseInt(process.env.MAX_COMPANIES_PER_RUN || '200', 10),
-    /** When true, only sync NO_WEBSITE rows to Sheets (still logs all). */
+    /** When true, only sync NO_WEBSITE rows to Sheets. */
     sheetsNoWebsiteOnly: process.env.SHEETS_NO_WEBSITE_ONLY === 'true',
+    /** When true, drop rows with neither phone nor email from Sheets sync. */
+    sheetsRequireContact: process.env.SHEETS_REQUIRE_CONTACT === 'true',
+    /**
+     * When true, only sync rows that have an official phone (cold-call mode).
+     * Overrides require-contact for sync filtering.
+     */
+    sheetsRequirePhone: process.env.SHEETS_REQUIRE_PHONE !== 'false',
     websiteProbeEnabled: process.env.WEBSITE_PROBE_ENABLED !== 'false',
     websiteMaxProbes: parseInt(process.env.WEBSITE_MAX_PROBES || '4', 10),
     websitePageTimeoutMs: parseInt(process.env.WEBSITE_PAGE_TIMEOUT_MS || '5000', 10),
@@ -33,7 +40,6 @@ export const config = {
 };
 
 export function validateConfig(): { valid: boolean; missing: string[] } {
-  // Open-data download needs no API key. Local dump path is optional.
   return { valid: true, missing: [] };
 }
 

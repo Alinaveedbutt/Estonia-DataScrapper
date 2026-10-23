@@ -11,7 +11,6 @@ export interface ParseFilter {
   /** Inclusive ISO dates yyyy-MM-dd */
   fromDate: string;
   toDate: string;
-  maxCompanies?: number;
 }
 
 export interface ParseResult {
@@ -71,9 +70,8 @@ export async function parseNewCompanies(
       if (d < from || d > to) return;
 
       matched += 1;
-      if (filter.maxCompanies && companies.length >= filter.maxCompanies) {
-        return;
-      }
+      // Collect every date match. Cap is applied later in the pipeline AFTER
+      // phone/NO_WEBSITE prioritisation so --max does not drop callable leads.
       companies.push(value);
     });
 
@@ -86,10 +84,6 @@ export async function parseNewCompanies(
     const db = parseEstonianDate(b.yldandmed?.esmaregistreerimise_kpv)?.getTime() || 0;
     return db - da;
   });
-
-  if (filter.maxCompanies && companies.length > filter.maxCompanies) {
-    companies.length = filter.maxCompanies;
-  }
 
   console.log(
     `[Estonia] Parse done — scanned ${scanned}, matched ${matched}, kept ${companies.length}` +
