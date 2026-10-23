@@ -23,18 +23,19 @@ Filter by first-entry / registration date (new companies)
         ↓
 Identity: name, registry code, status, legal form, address, date
         ↓
-Website detection:
+Automatic website check:
   1) Official WWW from register contacts
   2) Domain probe (.ee / .com / .eu)
+  → WEBSITE_EXISTS (skipped for Sheets) or NO_WEBSITE (lead)
         ↓
 Official phone (MOB/TEL) + email from register only — never invented
         ↓
-Sort: NO_WEBSITE → has phone → has contact → newest
+Google Sheets ← ONLY NO_WEBSITE (+ phone by default)
         ↓
-Google Sheets (default: rows with phone) → you cold-call / email
+You manually cold-call / email from the sheet (scraper never contacts anyone)
 ```
 
-**Primary targets:** `NO_WEBSITE` + official **phone** (offer websites / apps).
+**Sheet contents (defaults):** `NO_WEBSITE` + official **phone** — offer websites / apps.
 
 ---
 
@@ -96,11 +97,11 @@ Rows upsert by **Registry Code**.
 
 | Variable | Default | Effect |
 |----------|---------|--------|
+| `SHEETS_NO_WEBSITE_ONLY` | `true` | Only sync `NO_WEBSITE` rows (set `false` to include companies with websites) |
 | `SHEETS_REQUIRE_PHONE` | `true` | Only sync rows with official phone (cold-call) |
 | `SHEETS_REQUIRE_CONTACT` | `false` | If phone filter off: require phone or email |
-| `SHEETS_NO_WEBSITE_ONLY` | `false` | Sync only `NO_WEBSITE` rows |
 
-Set `SHEETS_REQUIRE_PHONE=false` if you also want email-only leads in the sheet.
+Set `SHEETS_REQUIRE_PHONE=false` if you also want email-only NO_WEBSITE leads in the sheet.
 
 ---
 
