@@ -1,32 +1,16 @@
 version: '3.8'
 
+# No database service — pipeline uses open-data files + Google Sheets only.
 services:
-  db:
-    image: postgres:15-alpine
-    environment:
-      POSTGRES_USER: user
-      POSTGRES_PASSWORD: password
-      POSTGRES_DB: uk_companies
-    ports:
-      - "5432:5432"
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U user -d uk_companies"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
-
   app:
     build: .
+    image: estonia-company-data-pipeline:latest
     environment:
-      - DATABASE_URL=postgresql://user:password@db:5432/uk_companies?schema=public
-    depends_on:
-      db:
-        condition: service_healthy
+      - GOOGLE_SHEETS_WEBHOOK_URL=${GOOGLE_SHEETS_WEBHOOK_URL}
+      - GOOGLE_SHEETS_WEBHOOK_SECRET=${GOOGLE_SHEETS_WEBHOOK_SECRET}
+      - ESTONIA_LOOKBACK_DAYS=${ESTONIA_LOOKBACK_DAYS:-7}
+      - MAX_COMPANIES_PER_RUN=${MAX_COMPANIES_PER_RUN:-200}
+      - ESTONIA_DATA_DIR=/usr/src/app/data
     volumes:
-      - .:/usr/src/app
-      - /usr/src/app/node_modules
-
-volumes:
-  postgres_data:
+      - ./data:/usr/src/app/data
+      - ./.env:/usr/src/app/.env:ro
