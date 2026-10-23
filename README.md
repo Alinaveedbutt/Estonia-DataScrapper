@@ -118,12 +118,14 @@ Set `SHEETS_REQUIRE_PHONE=false` if you also want email-only leads in the sheet.
 ## GitHub Actions
 
 - **CI** (`.github/workflows/ci.yml`) — `npm test` + `npm run build` on PRs/pushes
-- **Estonia Company Pipeline** (`.github/workflows/company-pipeline.yml`) — daily 02:00 UTC + manual
+- **Estonia Company Pipeline** (`.github/workflows/company-pipeline.yml`) — **daily at 12:00 noon Asia/Karachi (UTC+5)** = cron `0 7 * * *` (07:00 UTC), plus manual `workflow_dispatch`
 
-Secrets for the daily job:
+**Required for the daily Sheets sync** (schedule still runs without them, but sync fails):
 
-- `GOOGLE_SHEETS_WEBHOOK_URL`
-- `GOOGLE_SHEETS_WEBHOOK_SECRET`
+- Repo secret `GOOGLE_SHEETS_WEBHOOK_URL`
+- Repo secret `GOOGLE_SHEETS_WEBHOOK_SECRET`
+
+Also ensure **Actions are enabled** for the repository (Settings → Actions).
 
 ---
 

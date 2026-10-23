@@ -2,8 +2,9 @@ name: Estonia Company Pipeline
 
 on:
   schedule:
-    # Run daily at 02:00 UTC (after RIK daily open-data refresh)
-    - cron: '0 2 * * *'
+    # Daily at 12:00 noon Asia/Karachi (UTC+5) = 07:00 UTC
+    # GitHub Actions cron is always UTC: '0 7 * * *'
+    - cron: '0 7 * * *'
   workflow_dispatch:
 
 jobs:
