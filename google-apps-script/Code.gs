@@ -6,6 +6,9 @@
 //
 // Companies sheet: rolling 7-day cold-call leads (NO WEBSITE + phone).
 // After each sync, rows older than 7 days (by Registry Date OR Run Date) are deleted.
+//
+// Phone numbers like +372… MUST be written as plain text — otherwise Sheets
+// treats leading "+" as a formula and shows #ERROR!
 // ============================================================
 
 function getWebhookSecret() {
@@ -29,6 +32,29 @@ const COMPANY_HEADERS = [
 const COL_RUN_DATE = 0;
 const COL_REGISTRY_CODE = 1;
 const COL_REGISTRY_DATE = 3;
+const COL_PHONE = 6; // "Phone Number" (1-based column = 7)
+
+/**
+ * Force Sheets to treat a value as plain text (not a formula / number).
+ * Values starting with +, =, @, or - get a leading apostrophe (hidden in UI).
+ */
+function asPlainText(value) {
+  if (value === null || value === undefined) return '';
+  var s = String(value);
+  if (!s) return '';
+  // Already marked as text from a previous write
+  if (s.charAt(0) === "'") return s;
+  var first = s.charAt(0);
+  if (first === '+' || first === '=' || first === '@' || first === '-') {
+    return "'" + s;
+  }
+  return s;
+}
+
+function jsonOut(obj) {
+  return ContentService.createTextOutput(JSON.stringify(obj))
+    .setMimeType(ContentService.MimeType.JSON);
+}
 
 function doPost(e) {
   try {
@@ -41,18 +67,12 @@ function doPost(e) {
     const action = payload.action || 'sync_companies';
     if (action === 'sync_companies') return handleSyncCompanies(payload);
     if (action === 'health') return jsonOut({ success: true, message: 'Healthy' });
-    // update_stats kept as no-op for older clients
     if (action === 'update_stats') return jsonOut({ success: true });
 
     return jsonOut({ success: false, error: 'Unknown action: ' + action });
   } catch (err) {
     return jsonOut({ success: false, error: 'Server error: ' + err.message });
   }
-}
-
-function jsonOut(obj) {
-  return ContentService.createTextOutput(JSON.stringify(obj))
-    .setMimeType(ContentService.MimeType.JSON);
 }
 
 function ensureCompaniesSheet(ss) {
@@ -82,7 +102,15 @@ function ensureCompaniesSheet(ss) {
     sheet.getRange(1, 1, 1, COMPANY_HEADERS.length).setFontWeight('bold');
   }
 
+  formatTextColumns(sheet);
   return sheet;
+}
+
+/** Phone Number + Registry Code columns as plain text (@). */
+function formatTextColumns(sheet) {
+  // Entire columns (generous range) so future appends stay text
+  sheet.getRange(2, COL_PHONE + 1, 5000, 1).setNumberFormat('@');
+  sheet.getRange(2, COL_REGISTRY_CODE + 1, 5000, 1).setNumberFormat('@');
 }
 
 function handleSyncCompanies(payload) {
@@ -109,17 +137,24 @@ function handleSyncCompanies(payload) {
 
       var existingRow = companyIndex[key];
       if (existingRow) {
-        sheet.getRange(existingRow, 1, 1, row.length).setValues([row]);
+        var range = sheet.getRange(existingRow, 1, 1, row.length);
+        range.setNumberFormats([['@', '@', '@', '@', '@', '@', '@']]);
+        range.setValues([row]);
         updated++;
       } else {
         sheet.appendRow(row);
-        companyIndex[key] = sheet.getLastRow();
+        var newRow = sheet.getLastRow();
+        sheet.getRange(newRow, 1, 1, row.length).setNumberFormats([['@', '@', '@', '@', '@', '@', '@']]);
+        // Re-apply values after format so +phone stays text (appendRow can still formula-parse)
+        sheet.getRange(newRow, 1, 1, row.length).setValues([row]);
+        companyIndex[key] = newRow;
         inserted++;
       }
     }
+
+    formatTextColumns(sheet);
   }
 
-  // Always purge stale rows (rolling 7-day lead window)
   var purged = purgeOldRows(sheet);
 
   return jsonOut({
@@ -133,12 +168,13 @@ function handleSyncCompanies(payload) {
 function companyToRow(c) {
   return [
     c.run_date || '',
-    c.registry_code || '',
+    asPlainText(c.registry_code || ''),
     c.company_name || '',
     c.registry_date || '',
     c.website_status || '',
     c.email || '',
-    c.phone || ''
+    // Keep leading + for dialing; asPlainText prevents Sheets #ERROR! formula parse
+    asPlainText(c.phone || '')
   ];
 }
 
@@ -158,7 +194,6 @@ function purgeOldRows(sheet) {
   var values = sheet.getRange(2, 1, numDataRows, COMPANY_HEADERS.length).getValues();
   var purged = 0;
 
-  // Delete from bottom up so indices stay valid
   for (var i = values.length - 1; i >= 0; i--) {
     var runDate = parseSheetDate(values[i][COL_RUN_DATE]);
     var registryDate = parseSheetDate(values[i][COL_REGISTRY_DATE]);
@@ -175,7 +210,6 @@ function purgeOldRows(sheet) {
   return purged;
 }
 
-/** Parse DD/MM/YYYY or DD/MM/YYYY HH:mm UTC or Date objects from the sheet. */
 function parseSheetDate(value) {
   if (!value) return null;
   if (Object.prototype.toString.call(value) === '[object Date]' && !isNaN(value.getTime())) {
