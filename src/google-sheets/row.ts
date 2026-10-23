@@ -19,6 +19,8 @@ export function websiteStatusYesNo(status: CompanyRecord['website_status']): 'Ye
 /**
  * Map an internal company record to the slim Sheets row.
  * registry_date uses DD/MM/YYYY; website_status is Yes/No.
+ * Phone keeps a leading "+" for dialing — Apps Script `asPlainText` writes it
+ * so Google Sheets does not treat "+372…" as a formula (#ERROR!).
  */
 export function toSheetsRow(company: CompanyRecord, runAt: Date = new Date()): SheetsCompanyRow {
   return {

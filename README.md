@@ -118,6 +118,8 @@ After each sync, Apps Script **deletes** Companies rows where **Registry Date** 
 
 **After updating `Code.gs`:** Deploy → Manage deployments → Edit → **New version** → Deploy, then run the workflow once (Actions → Estonia Company Pipeline → Run workflow).
 
+Phone numbers are written as **plain text** (so `+372…` does not become `#ERROR!`). If you still see old wide headers (e.g. a lone **Phone** column), you have not redeployed the 7-column script yet — redeploy, then re-run.
+
 ---
 
 ## npm scripts
