@@ -70,7 +70,7 @@ Useful flags:
 | `--skip-sheets` | Do not call Apps Script |
 | `--skip-website-probe` | Only trust register WWW |
 
-First run downloads the **General data** zip (~200MB compressed; ~4GB JSON streamed, not fully loaded into RAM) into `./data/`. Cache reused for ~20h. Checkpoint: `data/pipeline-state.json`.
+Each run downloads (or reuses a fresh) **General data** zip (~200MB compressed; ~4GB JSON streamed) into `./data/`. Zip cache is reused for ~20h. **Every daily/manual scan re-processes the rolling last `ESTONIA_LOOKBACK_DAYS` (default 7)** and upserts to Sheets — it does not skip because a checkpoint exists. `pipeline-state.json` only records last success for logs; Actions caches the zip only (never the checkpoint).
 
 ```bash
 ESTONIA_LOCAL_DUMP_PATH=/path/to/ettevotja_rekvisiidid__yldandmed.json.zip \

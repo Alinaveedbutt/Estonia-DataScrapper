@@ -37,29 +37,19 @@ export function savePipelineState(state: PipelineStateFile): void {
 }
 
 /**
- * Date window for newly registered companies.
- * First run: last ESTONIA_LOOKBACK_DAYS through yesterday.
- * Later runs: day after last successful scan through yesterday.
+ * Rolling registration window: always the last `lookbackDays` through yesterday.
+ * Checkpoint is NOT used to shrink/skip this window — every daily/manual run
+ * re-processes the lookback so Sheets can be refilled (upsert).
  */
 export function getScanDateRange(
-  lastSuccessfulScan: string | null | undefined,
+  _lastSuccessfulScan: string | null | undefined = null,
   now = new Date(),
   lookbackDays = config.estonia.lookbackDays
 ): ScanDateRange {
   const yesterday = startOfDay(subDays(now, 1));
-  let scanFrom: Date;
-
-  if (lastSuccessfulScan) {
-    scanFrom = startOfDay(addDays(new Date(lastSuccessfulScan), 1));
-  } else {
-    scanFrom = startOfDay(subDays(yesterday, Math.max(0, lookbackDays - 1)));
-  }
-
+  const days = Math.max(1, lookbackDays);
+  const scanFrom = startOfDay(subDays(yesterday, days - 1));
   const scanTo = yesterday;
-
-  if (scanFrom > scanTo) {
-    return { fromDate: format(scanFrom, 'yyyy-MM-dd'), toDate: format(scanTo, 'yyyy-MM-dd'), dates: [] };
-  }
 
   const dates: string[] = [];
   for (let d = scanFrom; d <= scanTo; d = addDays(d, 1)) {
@@ -71,6 +61,20 @@ export function getScanDateRange(
     toDate: format(scanTo, 'yyyy-MM-dd'),
     dates,
   };
+}
+
+/** Build inclusive date list for an explicit --from/--to window. */
+export function rangeFromExplicit(fromDate: string, toDate: string): ScanDateRange {
+  const scanFrom = startOfDay(new Date(fromDate + 'T00:00:00Z'));
+  const scanTo = startOfDay(new Date(toDate + 'T00:00:00Z'));
+  if (Number.isNaN(scanFrom.getTime()) || Number.isNaN(scanTo.getTime()) || scanFrom > scanTo) {
+    return { fromDate, toDate, dates: [] };
+  }
+  const dates: string[] = [];
+  for (let d = scanFrom; d <= scanTo; d = addDays(d, 1)) {
+    dates.push(format(d, 'yyyy-MM-dd'));
+  }
+  return { fromDate: format(scanFrom, 'yyyy-MM-dd'), toDate: format(scanTo, 'yyyy-MM-dd'), dates };
 }
 
 export function shouldAdvanceCheckpoint(runSucceeded: boolean, hadDates: boolean): boolean {

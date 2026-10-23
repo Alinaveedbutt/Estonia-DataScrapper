@@ -9,6 +9,7 @@ import { CompanyRecord, PipelineStats } from '../types/company';
 import {
   getScanDateRange,
   loadPipelineState,
+  rangeFromExplicit,
   savePipelineState,
   shouldAdvanceCheckpoint,
 } from './checkpoint';
@@ -37,30 +38,35 @@ export class CompanyPipeline {
     state.last_attempted_scan = new Date().toISOString();
     savePipelineState(state);
 
+    // Always rolling lookback (or explicit --from/--to). Never skip because checkpoint is "current".
     const scanRange =
       options.fromDate && options.toDate
-        ? {
-            fromDate: options.fromDate,
-            toDate: options.toDate,
-            dates: [options.fromDate],
-          }
-        : getScanDateRange(state.last_successful_scan);
+        ? rangeFromExplicit(options.fromDate, options.toDate)
+        : getScanDateRange(null, new Date(), config.estonia.lookbackDays);
 
-    if (scanRange.dates.length === 0 && !(options.fromDate && options.toDate)) {
-      console.log('[Pipeline] No new registration dates to scan. Checkpoint is up to date.');
-      return { success: true, stats: null as PipelineStats | null, companies: [] as CompanyRecord[] };
+    if (scanRange.dates.length === 0) {
+      console.error('[Pipeline] Invalid registration date window — nothing to scan.');
+      return { success: false, stats: null as PipelineStats | null, companies: [] as CompanyRecord[] };
     }
 
-    console.log(`[Pipeline] Registration window: ${scanRange.fromDate} → ${scanRange.toDate}`);
+    console.log(
+      `[Pipeline] Registration window: ${scanRange.fromDate} → ${scanRange.toDate}` +
+        ` (${scanRange.dates.length} days, lookback=${config.estonia.lookbackDays})`
+    );
+    if (state.last_successful_scan) {
+      console.log(
+        `[Pipeline] Last successful run noted: ${state.last_successful_scan} (does not shrink this window)`
+      );
+    }
 
     const dump = await ensureGeneralDataDump();
     const maxCompanies = options.maxCompanies ?? config.app.maxCompaniesPerRun;
 
-    // Collect full date window first (do not early-cap during alphabetical scan).
     const parsed = await parseNewCompanies(dump.zipPath, {
       fromDate: scanRange.fromDate,
       toDate: scanRange.toDate,
     });
+    console.log(`[Pipeline] Matched from open data: ${parsed.matched} (kept ${parsed.companies.length})`);
 
     const probeEnabled = options.skipWebsiteProbe ? false : config.app.websiteProbeEnabled;
     const limit = pLimit(config.app.concurrency);
@@ -91,7 +97,6 @@ export class CompanyPipeline {
       )
     );
 
-    // Phone-first outreach order, then optional cap so --max keeps callable leads.
     let ordered = prioritizeForOutreach(mapped);
     if (maxCompanies > 0 && ordered.length > maxCompanies) {
       console.log(
@@ -99,6 +104,7 @@ export class CompanyPipeline {
       );
       ordered = ordered.slice(0, maxCompanies);
     }
+    console.log(`[Pipeline] After prioritisation/cap: ${ordered.length}`);
 
     const noWebsite = ordered.filter((c) => c.website_status === 'NO_WEBSITE');
     const withWebsite = ordered.filter((c) => c.website_status === 'WEBSITE_EXISTS');
@@ -135,40 +141,43 @@ export class CompanyPipeline {
     );
 
     let runSucceeded = true;
+    let syncedCount = 0;
+
+    const toSync = filterForSheets(ordered, {
+      noWebsiteOnly: config.app.sheetsNoWebsiteOnly,
+      requireContact: config.app.sheetsRequireContact,
+      requirePhone: config.app.sheetsRequirePhone,
+    });
+    console.log(
+      `[Pipeline] After Sheets filters (NO_WEBSITE only=${config.app.sheetsNoWebsiteOnly}, requirePhone=${config.app.sheetsRequirePhone}): ${toSync.length}`
+    );
 
     if (!options.skipSheetsSync && this.webhook.isConfigured()) {
-      const toSync = filterForSheets(ordered, {
-        noWebsiteOnly: config.app.sheetsNoWebsiteOnly,
-        requireContact: config.app.sheetsRequireContact,
-        requirePhone: config.app.sheetsRequirePhone,
-      });
-      console.log(
-        `[Pipeline] Syncing ${toSync.length} rows to Google Sheets` +
-          ` (NO_WEBSITE only=${config.app.sheetsNoWebsiteOnly}, requirePhone=${config.app.sheetsRequirePhone})…`
-      );
+      console.log(`[Pipeline] Syncing ${toSync.length} rows to Google Sheets…`);
       try {
         await this.webhook.syncCompanies(toSync, new Date());
+        syncedCount = toSync.length;
+        console.log(`[Pipeline] Synced: ${syncedCount}`);
       } catch (err: any) {
         runSucceeded = false;
         console.error(`[Pipeline] Sheets sync failed: ${err.message}`);
+        console.log(`[Pipeline] Synced: 0 (failed)`);
       }
     } else if (!options.skipSheetsSync) {
       console.warn(
         '[Pipeline] Google Sheets webhook not configured — results kept in-memory only for this run.'
       );
+      console.log(`[Pipeline] Synced: 0 (webhook not configured; would have sent ${toSync.length})`);
+    } else {
+      console.log(`[Pipeline] Synced: 0 (--skip-sheets; filtered count ${toSync.length})`);
     }
 
-    if (
-      shouldAdvanceCheckpoint(
-        runSucceeded,
-        scanRange.dates.length > 0 || !!(options.fromDate && options.toDate)
-      )
-    ) {
+    if (shouldAdvanceCheckpoint(runSucceeded, scanRange.dates.length > 0)) {
       state.last_successful_scan = scanRange.toDate;
       state.updated_at = new Date().toISOString();
       savePipelineState(state);
       stats.lastSuccessfulRun = state.last_successful_scan;
-      console.log(`[Pipeline] Checkpoint advanced to ${state.last_successful_scan}`);
+      console.log(`[Pipeline] Checkpoint recorded: ${state.last_successful_scan}`);
     }
 
     return { success: runSucceeded, stats, companies: ordered };

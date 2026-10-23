@@ -1,25 +1,30 @@
-import { getScanDateRange, shouldAdvanceCheckpoint } from './checkpoint';
+import { getScanDateRange, rangeFromExplicit, shouldAdvanceCheckpoint } from './checkpoint';
 
 describe('getScanDateRange', () => {
-  it('uses lookback on first run', () => {
+  it('always uses rolling lookback (ignores checkpoint)', () => {
     const now = new Date('2026-10-23T12:00:00Z');
-    const range = getScanDateRange(null, now, 3);
-    expect(range.fromDate).toBe('2026-10-20');
-    expect(range.toDate).toBe('2026-10-22');
-    expect(range.dates).toEqual(['2026-10-20', '2026-10-21', '2026-10-22']);
+    const first = getScanDateRange(null, now, 3);
+    const withCheckpoint = getScanDateRange('2026-10-22', now, 3);
+    expect(first.fromDate).toBe('2026-10-20');
+    expect(first.toDate).toBe('2026-10-22');
+    expect(first.dates).toEqual(['2026-10-20', '2026-10-21', '2026-10-22']);
+    // Same window even when checkpoint says "already done"
+    expect(withCheckpoint).toEqual(first);
   });
 
-  it('continues from checkpoint', () => {
-    const now = new Date('2026-10-23T12:00:00Z');
-    const range = getScanDateRange('2026-10-20', now, 7);
-    expect(range.fromDate).toBe('2026-10-21');
-    expect(range.toDate).toBe('2026-10-22');
-  });
-
-  it('returns empty when checkpoint is current', () => {
+  it('uses full lookback of 7 days', () => {
     const now = new Date('2026-10-23T12:00:00Z');
     const range = getScanDateRange('2026-10-22', now, 7);
-    expect(range.dates).toEqual([]);
+    expect(range.fromDate).toBe('2026-10-16');
+    expect(range.toDate).toBe('2026-10-22');
+    expect(range.dates).toHaveLength(7);
+  });
+});
+
+describe('rangeFromExplicit', () => {
+  it('expands inclusive dates', () => {
+    const range = rangeFromExplicit('2026-10-20', '2026-10-22');
+    expect(range.dates).toEqual(['2026-10-20', '2026-10-21', '2026-10-22']);
   });
 });
 
