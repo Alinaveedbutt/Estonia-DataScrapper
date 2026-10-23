@@ -1,0 +1,77 @@
+[
+  {
+    "ariregistri_kood": 17630099,
+    "nimi": "0111 Productions OÜ",
+    "yldandmed": {
+      "esmaregistreerimise_kpv": "21.10.2026",
+      "staatus": "R",
+      "staatus_tekstina": "Registrisse kantud",
+      "oiguslik_vorm": "OÜ",
+      "oiguslik_vorm_tekstina": "Osaühing",
+      "aadressid": [
+        {
+          "tanav_maja_korter": "Narva mnt 5",
+          "ehak_nimetus": "Kesklinna linnaosa, Tallinn, Harju maakond",
+          "postiindeks": "10117",
+          "riik_tekstina": "Eesti",
+          "aadress_ads__ads_normaliseeritud_taisaadress": "Harju maakond, Tallinn, Kesklinna linnaosa, Narva mnt 5",
+          "lopp_kpv": null
+        }
+      ],
+      "sidevahendid": [
+        { "liik": "EMAIL", "liik_tekstina": "Elektronposti aadress", "sisu": "a.zazhitskaya@gmail.com", "lopp_kpv": null },
+        { "liik": "MOB", "liik_tekstina": "Mobiiltelefon", "sisu": "+372 58291086", "lopp_kpv": null }
+      ]
+    }
+  },
+  {
+    "ariregistri_kood": 17624489,
+    "nimi": "311 Capital OÜ",
+    "yldandmed": {
+      "esmaregistreerimise_kpv": "14.10.2026",
+      "staatus": "R",
+      "staatus_tekstina": "Registrisse kantud",
+      "oiguslik_vorm": "OÜ",
+      "oiguslik_vorm_tekstina": "Osaühing",
+      "aadressid": [
+        {
+          "tanav_maja_korter": "Pärnu mnt 10",
+          "ehak_nimetus": "Kesklinna linnaosa, Tallinn, Harju maakond",
+          "postiindeks": "10148",
+          "riik_tekstina": "Eesti",
+          "aadress_ads__ads_normaliseeritud_taisaadress": "Harju maakond, Tallinn, Kesklinna linnaosa, Pärnu mnt 10",
+          "lopp_kpv": null
+        }
+      ],
+      "sidevahendid": [
+        { "liik": "EMAIL", "liik_tekstina": "Elektronposti aadress", "sisu": "info@kilomotors.ee", "lopp_kpv": null },
+        { "liik": "WWW", "liik_tekstina": "Interneti WWW aadress", "sisu": "https://kilomotors.ee/", "lopp_kpv": null }
+      ]
+    }
+  },
+  {
+    "ariregistri_kood": 17064033,
+    "nimi": "007Draiv OÜ",
+    "yldandmed": {
+      "esmaregistreerimise_kpv": "06.09.2024",
+      "staatus": "R",
+      "staatus_tekstina": "Registrisse kantud",
+      "oiguslik_vorm": "OÜ",
+      "oiguslik_vorm_tekstina": "Osaühing",
+      "aadressid": [
+        {
+          "tanav_maja_korter": "Tööstuse tn 81-24",
+          "ehak_nimetus": "Põhja-Tallinna linnaosa, Tallinn, Harju maakond",
+          "postiindeks": "10416",
+          "riik_tekstina": "Eesti",
+          "aadress_ads__ads_normaliseeritud_taisaadress": "Harju maakond, Tallinn, Põhja-Tallinna linnaosa, Tööstuse tn 81-24",
+          "lopp_kpv": null
+        }
+      ],
+      "sidevahendid": [
+        { "liik": "EMAIL", "liik_tekstina": "Elektronposti aadress", "sisu": "rv.dynamo800@gmail.com", "lopp_kpv": null },
+        { "liik": "MOB", "liik_tekstina": "Mobiiltelefon", "sisu": "+372 55599915", "lopp_kpv": null }
+      ]
+    }
+  }
+]

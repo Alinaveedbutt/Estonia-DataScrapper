@@ -1,83 +1,56 @@
-import { config, validateConfig, validateFullConfig } from './config/env';
-import { connectDb, disconnectDb, getDbSizeEstimate } from './database/client';
-import { chClient } from './companies-house/client';
+import axios from 'axios';
+import { config, validateFullConfig } from './config/env';
 import { GoogleSheetsWebhook } from './google-sheets/webhook';
 
-async function healthCheck() {
-  console.log('=== Health Check ===\n');
-  let allOk = true;
+async function main() {
+  console.log('Estonia Company Pipeline — Health Check\n');
 
-  // 1. Config
-  const { valid, missing } = validateConfig();
-  if (valid) {
-    console.log('✅ Core config: OK');
-  } else {
-    console.log(`❌ Core config: Missing ${missing.join(', ')}`);
-    allOk = false;
+  let ok = true;
+
+  // Open data URL reachable
+  try {
+    const res = await axios.head(config.estonia.generalDataUrl, {
+      timeout: 20000,
+      maxRedirects: 5,
+      validateStatus: (s) => s >= 200 && s < 400,
+      headers: { 'User-Agent': 'estonia-company-data-pipeline/1.0' },
+    });
+    console.log(`[OK] Open data URL reachable (HTTP ${res.status})`);
+  } catch (err: any) {
+    // Some hosts block HEAD — try a ranged GET
+    try {
+      await axios.get(config.estonia.generalDataUrl, {
+        timeout: 20000,
+        headers: { Range: 'bytes=0-64', 'User-Agent': 'estonia-company-data-pipeline/1.0' },
+        validateStatus: (s) => s >= 200 && s < 500,
+        maxContentLength: 1024,
+      });
+      console.log('[OK] Open data URL reachable (GET range)');
+    } catch (err2: any) {
+      ok = false;
+      console.error(`[FAIL] Open data URL: ${err2.message}`);
+    }
+  }
+
+  if (config.estonia.localDumpPath) {
+    console.log(`[INFO] Local dump override: ${config.estonia.localDumpPath}`);
   }
 
   const full = validateFullConfig();
   if (full.valid) {
-    console.log('✅ Full config: OK');
-  } else {
-    console.log(`⚠️  Optional config: Missing ${full.missing.join(', ')}`);
-  }
-
-  // 2. Database
-  const dbOk = await connectDb();
-  if (dbOk) {
-    console.log('✅ Database: Connected');
-    const size = await getDbSizeEstimate();
-    const mbStr = (size.sizeBytes / 1024 / 1024).toFixed(2);
-    console.log(`   Companies: ${size.tables} | Logs: ${size.logCount} | Size: ${mbStr} MB`);
-    console.log(`   Free-tier status: ${size.safeToContinue ? 'NORMAL ✅' : 'CRITICAL ❌'}`);
-    if (!size.safeToContinue) allOk = false;
-    await disconnectDb();
-  } else {
-    console.log('❌ Database: Connection failed');
-    allOk = false;
-  }
-
-  // 3. Companies House
-  if (config.companiesHouse.apiKey) {
-    const chOk = await chClient.testConnection();
-    if (chOk) {
-      console.log('✅ Companies House API: Connected');
-    } else {
-      console.log('❌ Companies House API: Connection failed');
-      allOk = false;
+    const webhook = new GoogleSheetsWebhook();
+    const sheetsOk = await webhook.testConnection();
+    if (sheetsOk) console.log('[OK] Google Sheets webhook');
+    else {
+      ok = false;
+      console.error('[FAIL] Google Sheets webhook');
     }
   } else {
-    console.log('⚠️  Companies House: No API key configured');
+    console.warn(`[WARN] Sheets not configured: ${full.missing.join(', ')}`);
   }
 
-  // 4. Google Apps Script Webhook
-  const webhook = new GoogleSheetsWebhook();
-  if (webhook.isConfigured()) {
-    const gsOk = await webhook.testConnection();
-    if (gsOk) {
-      console.log('✅ Google Apps Script: Connected');
-    } else {
-      console.log('❌ Google Apps Script: Connection failed');
-      allOk = false;
-    }
-  } else {
-    console.log('⚠️  Google Apps Script: Webhook not configured');
-  }
-
-  // 5. Cost Safety Summary
-  console.log('\n--- Zero-Cost Safety ---');
-  console.log('  Database:          Neon Free PostgreSQL');
-  console.log('  Search:            Optional (disabled by default)');
-  console.log('  Contact sources:   Companies House page, Endole, Yell/192/Cylex direct lookup');
-  console.log('  Crawler:           axios + cheerio (free/open-source)');
-  console.log('  Google Sheets:     Apps Script Web App (free)');
-  console.log('  Automation:        GitHub Actions standard runner (free)');
-  console.log('  Paid fallbacks:    NONE');
-  console.log('  Auto-upgrade:      DISABLED');
-
-  console.log('\n' + (allOk ? '✅ All systems OK' : '❌ Some checks failed'));
-  process.exit(allOk ? 0 : 1);
+  console.log(ok ? '\nHealth check passed.' : '\nHealth check failed.');
+  process.exit(ok ? 0 : 1);
 }
 
-healthCheck();
+main();

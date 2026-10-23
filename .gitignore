@@ -25,6 +25,8 @@ Thumbs.db
 coverage/
 .nyc_output/
 
-# Prisma local dev
-*.db
-*.db-journal
+# Open-data downloads + local checkpoint (can be large)
+data/*
+!data/.gitkeep
+*.json.zip
+ettevotja_rekvisiidid__*

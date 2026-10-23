@@ -1,29 +1,64 @@
 import { addDays, format, startOfDay, subDays } from 'date-fns';
+import fs from 'fs';
+import path from 'path';
+import { config } from '../config/env';
 
 export interface ScanDateRange {
+  fromDate: string;
+  toDate: string;
   dates: string[];
-  scanFrom: Date;
-  scanTo: Date;
+}
+
+export interface PipelineStateFile {
+  last_successful_scan: string | null;
+  last_attempted_scan: string | null;
+  updated_at: string;
+}
+
+function statePath(): string {
+  return path.join(config.estonia.dataDir, 'pipeline-state.json');
+}
+
+export function loadPipelineState(): PipelineStateFile {
+  const p = statePath();
+  if (!fs.existsSync(p)) {
+    return { last_successful_scan: null, last_attempted_scan: null, updated_at: new Date().toISOString() };
+  }
+  try {
+    return JSON.parse(fs.readFileSync(p, 'utf8')) as PipelineStateFile;
+  } catch {
+    return { last_successful_scan: null, last_attempted_scan: null, updated_at: new Date().toISOString() };
+  }
+}
+
+export function savePipelineState(state: PipelineStateFile): void {
+  fs.mkdirSync(config.estonia.dataDir, { recursive: true });
+  fs.writeFileSync(statePath(), JSON.stringify(state, null, 2), 'utf8');
 }
 
 /**
- * Determine which incorporation dates to scan based on the last successful checkpoint.
- * First run scans yesterday only. Subsequent runs fill gaps from checkpoint+1 through yesterday.
+ * Date window for newly registered companies.
+ * First run: last ESTONIA_LOOKBACK_DAYS through yesterday.
+ * Later runs: day after last successful scan through yesterday.
  */
-export function getScanDateRange(lastSuccessfulScan: Date | null | undefined, now = new Date()): ScanDateRange {
+export function getScanDateRange(
+  lastSuccessfulScan: string | null | undefined,
+  now = new Date(),
+  lookbackDays = config.estonia.lookbackDays
+): ScanDateRange {
   const yesterday = startOfDay(subDays(now, 1));
-
   let scanFrom: Date;
+
   if (lastSuccessfulScan) {
-    scanFrom = startOfDay(addDays(lastSuccessfulScan, 1));
+    scanFrom = startOfDay(addDays(new Date(lastSuccessfulScan), 1));
   } else {
-    scanFrom = yesterday;
+    scanFrom = startOfDay(subDays(yesterday, Math.max(0, lookbackDays - 1)));
   }
 
   const scanTo = yesterday;
 
   if (scanFrom > scanTo) {
-    return { dates: [], scanFrom, scanTo };
+    return { fromDate: format(scanFrom, 'yyyy-MM-dd'), toDate: format(scanTo, 'yyyy-MM-dd'), dates: [] };
   }
 
   const dates: string[] = [];
@@ -31,9 +66,13 @@ export function getScanDateRange(lastSuccessfulScan: Date | null | undefined, no
     dates.push(format(d, 'yyyy-MM-dd'));
   }
 
-  return { dates, scanFrom, scanTo };
+  return {
+    fromDate: format(scanFrom, 'yyyy-MM-dd'),
+    toDate: format(scanTo, 'yyyy-MM-dd'),
+    dates,
+  };
 }
 
-export function shouldAdvanceCheckpoint(runSucceeded: boolean, lastCompletedDate: Date | null): boolean {
-  return runSucceeded && lastCompletedDate !== null;
+export function shouldAdvanceCheckpoint(runSucceeded: boolean, hadDates: boolean): boolean {
+  return runSucceeded && hadDates;
 }

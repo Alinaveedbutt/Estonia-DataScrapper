@@ -1,16 +1,16 @@
-name: UK Company Pipeline
+name: Estonia Company Pipeline
 
 on:
   schedule:
-    # Run daily at 02:00 UTC
+    # Run daily at 02:00 UTC (after RIK daily open-data refresh)
     - cron: '0 2 * * *'
   workflow_dispatch:
-    # Allow manual triggering from Actions tab
 
 jobs:
   enrich-companies:
     runs-on: ubuntu-latest
-    timeout-minutes: 120
+    # General data zip is large; allow time to download + stream-parse
+    timeout-minutes: 180
 
     steps:
       - name: Checkout Repository
@@ -25,26 +25,26 @@ jobs:
       - name: Install Dependencies
         run: npm ci
 
-      - name: Generate Prisma Client
-        run: npx prisma generate
-
-      - name: Deploy Database Migrations
-        env:
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
-        run: npx prisma migrate deploy
+      - name: Cache open-data dump
+        uses: actions/cache@v4
+        with:
+          path: data
+          key: estonia-open-data-${{ github.run_id }}
+          restore-keys: |
+            estonia-open-data-
 
       - name: Run Health Check
         env:
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
-          COMPANIES_HOUSE_API_KEY: ${{ secrets.COMPANIES_HOUSE_API_KEY }}
           GOOGLE_SHEETS_WEBHOOK_URL: ${{ secrets.GOOGLE_SHEETS_WEBHOOK_URL }}
           GOOGLE_SHEETS_WEBHOOK_SECRET: ${{ secrets.GOOGLE_SHEETS_WEBHOOK_SECRET }}
         run: npm run health
 
       - name: Run Pipeline Scan
         env:
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
-          COMPANIES_HOUSE_API_KEY: ${{ secrets.COMPANIES_HOUSE_API_KEY }}
           GOOGLE_SHEETS_WEBHOOK_URL: ${{ secrets.GOOGLE_SHEETS_WEBHOOK_URL }}
           GOOGLE_SHEETS_WEBHOOK_SECRET: ${{ secrets.GOOGLE_SHEETS_WEBHOOK_SECRET }}
+          ESTONIA_LOOKBACK_DAYS: '7'
+          MAX_COMPANIES_PER_RUN: '500'
+          SHEETS_REQUIRE_PHONE: 'true'
+          SHEETS_NO_WEBSITE_ONLY: 'false'
         run: npm run scan
