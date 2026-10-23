@@ -22,8 +22,8 @@ export const config = {
   app: {
     logLevel: process.env.LOG_LEVEL || 'info',
     maxCompaniesPerRun: parseInt(process.env.MAX_COMPANIES_PER_RUN || '200', 10),
-    /** When true, only sync NO_WEBSITE rows to Sheets. */
-    sheetsNoWebsiteOnly: process.env.SHEETS_NO_WEBSITE_ONLY === 'true',
+    /** Default true — only sync NO_WEBSITE rows to Sheets (cold-outreach leads). */
+    sheetsNoWebsiteOnly: process.env.SHEETS_NO_WEBSITE_ONLY !== 'false',
     /** When true, drop rows with neither phone nor email from Sheets sync. */
     sheetsRequireContact: process.env.SHEETS_REQUIRE_CONTACT === 'true',
     /**

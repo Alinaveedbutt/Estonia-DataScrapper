@@ -47,5 +47,5 @@ jobs:
           ESTONIA_LOOKBACK_DAYS: '7'
           MAX_COMPANIES_PER_RUN: '500'
           SHEETS_REQUIRE_PHONE: 'true'
-          SHEETS_NO_WEBSITE_ONLY: 'false'
+          SHEETS_NO_WEBSITE_ONLY: 'true'
         run: npm run scan

@@ -4,7 +4,7 @@ Zero-cost pipeline for **cold-call / email outreach**: finds **newly registered 
 
 It does **not** send emails, make calls, or contact companies. You do outreach yourself.
 
-**Cold-call focus:** Phone is first-class (MOB preferred, then TEL). Default Sheets sync only includes rows with an official register phone (`SHEETS_REQUIRE_PHONE=true`). Email is kept alongside when published.
+**Cold-call focus:** Website check is automatic. **Google Sheets only receives `NO_WEBSITE` companies** (`SHEETS_NO_WEBSITE_ONLY=true`) that also have an official register phone by default (`SHEETS_REQUIRE_PHONE=true`). Email is kept alongside when published. The scraper never contacts anyone — you cold-call / email from the sheet.
 
 ---
 
